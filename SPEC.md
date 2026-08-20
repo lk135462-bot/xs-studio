@@ -35,7 +35,8 @@ Claude Code。
 
 ## 輸出
 
-- 對話介面裡的完整 XS 腳本（```xs 圍籬），可一鍵複製或存成 `.xs`（UTF-8 with BOM）
+- 對話介面裡的完整 XS 腳本（```xs 圍籬），可一鍵複製或存成 `.xs`
+  （UTF-8 with BOM ＋ CRLF——Windows 編輯器兩者都需要，缺一個就會亂碼或擠成一行）
 - 每輪附「參考了知識庫哪幾筆」的引用清單
 - 匯入 XQ 的步驟指引
 
@@ -102,6 +103,8 @@ npm 安裝得到的正是 `claude.cmd`，照直覺「使用者自己裝的優先
 | **免安裝版完整對話** | 走內嵌 Python → SDK → 內附 claude.exe | **通過**：首字 3.9 s、全長 29 s、腳本結構正確 |
 | **內附 CLI 路徑** | 強制走 `_bundled/claude.exe`，模擬從沒裝過 Claude Code 的使用者 | **通過**：登入偵測正確、實際回應正確 |
 | 簽章稽核 | 打包時逐支 `.exe` 查 Authenticode | 通過：零未簽章執行檔 |
+| **完整操作情境** | Playwright 驅動免安裝版走完九步（首開→嚮導→測試連線→起手式→寫腳本→複製→追加條件→存檔→重開） | **通過**：零前端錯誤；寫腳本 28.3 s、追加條件 23.4 s |
+| **交付檔格式** | 下載的 `.xs` 檢查 BOM／換行／內容 | 通過（修掉 LF-only 缺陷後：BOM ＋ 全 CRLF ＋ 一字不差） |
 | PyInstaller EXE 啟動 | 雙擊 | **仍未通過**——Smart App Control 封鎖未簽章執行檔（WinError 4551）。已改用免安裝版繞過，見 DISTRIBUTION.md |
 
 **未驗證項目（誠實記錄）**：Anthropic API 與 OpenRouter 兩條路線的實際線上呼叫
