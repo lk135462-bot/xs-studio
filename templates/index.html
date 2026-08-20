@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ app_name }}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f9fff'/%3E%3Ctext x='32' y='44' font-size='32' font-weight='bold' text-anchor='middle' fill='white' font-family='sans-serif'%3EXS%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css?v={{ version }}">
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── 側欄 ───────────────────────────────────────────────── -->
+  <aside class="side">
+    <div class="brand">
+      <div class="brand-mark">XS</div>
+      <div class="brand-text">
+        <strong>XS 工坊</strong>
+        <span>XQ 腳本軍師</span>
+      </div>
+    </div>
+
+    <button id="btn-new" class="btn btn-primary btn-block">＋ 開新對話</button>
+
+    <section class="panel">
+      <h2 class="panel-title">起手式</h2>
+      <div id="starters" class="starters"></div>
+    </section>
+
+    <section class="panel panel-status">
+      <h2 class="panel-title">狀態</h2>
+      <button id="status-conn" class="status-row" type="button">
+        <span class="dot" id="dot-conn"></span>
+        <span class="status-body">
+          <span class="status-name">AI 連線</span>
+          <span class="status-sub" id="conn-sub">檢查中…</span>
+        </span>
+        <span class="status-act">設定</span>
+      </button>
+      <div class="status-row static">
+        <span class="dot" id="dot-kb"></span>
+        <span class="status-body">
+          <span class="status-name">XS 知識庫</span>
+          <span class="status-sub" id="kb-sub">載入中…</span>
+        </span>
+      </div>
+    </section>
+
+    <footer class="side-foot">
+      <span>v{{ version }}</span>
+      <button id="btn-help" class="linkish" type="button">使用說明</button>
+    </footer>
+  </aside>
+
+  <!-- ── 主區 ───────────────────────────────────────────────── -->
+  <main class="main">
+    <div id="chat" class="chat">
+      <div class="welcome" id="welcome">
+        <h1>把你的交易想法，講成一支 XS 腳本</h1>
+        <p>用平常講策略的方式描述就好——進場條件、出場條件、要看哪些數據。
+           軍師會查 XQ 官方手冊與近 400 支範例腳本，寫出能直接在 XQ 編譯的腳本。</p>
+        <div class="welcome-hint" id="welcome-hint"></div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <textarea id="input" rows="1" placeholder="描述你的交易策略…"></textarea>
+        <button id="btn-send" class="btn btn-primary btn-send" type="button" title="送出（Enter）">送出</button>
+        <button id="btn-stop" class="btn btn-stop" type="button" hidden>停止</button>
+      </div>
+      <div class="composer-foot">
+        <span>Enter 送出 · Shift+Enter 換行</span>
+        <span id="composer-note"></span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── 連線設定 / 首次嚮導 ────────────────────────────────────── -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <header class="modal-head">
+      <h2 id="modal-title">連上 AI</h2>
+      <button id="modal-close" class="icon-btn" type="button" aria-label="關閉">✕</button>
+    </header>
+
+    <div class="modal-body">
+      <p class="modal-lede" id="modal-lede">
+        XS 工坊本身不含 AI，要接一個「大腦」才能開始。選一條最適合你的：
+      </p>
+
+      <div class="routes" id="routes">
+        <button class="route" data-p="claude_sdk" type="button">
+          <span class="route-top">
+            <strong>用我的 Claude Code 訂閱</strong>
+            <span class="tag tag-best">推薦</span>
+          </span>
+          <span class="route-sub">已經訂閱 Claude Code 的話，直接吃訂閱額度，不用另外付錢、不用貼金鑰。</span>
+          <span class="route-state" data-state="claude_sdk">偵測中…</span>
+        </button>
+
+        <button class="route" data-p="anthropic_api" type="button">
+          <span class="route-top"><strong>Anthropic API Key</strong></span>
+          <span class="route-sub">沒有訂閱也能用。到 console.anthropic.com 申請一把金鑰、儲值後貼上即可。</span>
+          <span class="route-state" data-state="anthropic_api"></span>
+        </button>
+
+        <button class="route" data-p="openrouter" type="button">
+          <span class="route-top"><strong>OpenRouter</strong></span>
+          <span class="route-sub">一把金鑰通吃各家模型，想省錢或想換模型時用。</span>
+          <span class="route-state" data-state="openrouter"></span>
+        </button>
+
+        <button class="route" data-p="local" type="button">
+          <span class="route-top"><strong>本地模型</strong></span>
+          <span class="route-sub">Ollama 或 LM Studio 跑在自己電腦上，免費、資料不外傳；需要較好的顯示卡。</span>
+          <span class="route-state" data-state="local">偵測中…</span>
+        </button>
+      </div>
+
+      <!-- 各路線的設定欄位 -->
+      <div class="route-form" id="form-claude_sdk" hidden>
+        <div class="field">
+          <label>模型（留空用預設）</label>
+          <input type="text" id="f-sdk-model" placeholder="claude-sonnet-4-6">
+        </div>
+        <div class="field-row" id="sdk-actions" hidden>
+          <button id="btn-claude-login" class="btn btn-ghost" type="button">登入 Claude 帳號</button>
+          <button id="btn-reprobe" class="btn btn-ghost" type="button">重新偵測</button>
+        </div>
+        <p class="note" id="sdk-note"></p>
+      </div>
+
+      <div class="route-form" id="form-anthropic_api" hidden>
+        <div class="field">
+          <label>API Key</label>
+          <input type="password" id="f-anthropic-key" placeholder="sk-ant-…" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>模型（留空用預設）</label>
+          <input type="text" id="f-anthropic-model" placeholder="claude-sonnet-4-6">
+        </div>
+        <p class="note">金鑰只存在你自己電腦的 secrets.json，不會傳給任何第三方。</p>
+      </div>
+
+      <div class="route-form" id="form-openrouter" hidden>
+        <div class="field">
+          <label>API Key</label>
+          <input type="password" id="f-openrouter-key" placeholder="sk-or-…" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>模型</label>
+          <input type="text" id="f-openrouter-model" placeholder="anthropic/claude-sonnet-4.5">
+        </div>
+        <p class="note">寫程式建議選 Claude 或 GPT 等級的模型，太小的模型寫出來的 XS 編譯不過。</p>
+      </div>
+
+      <div class="route-form" id="form-local" hidden>
+        <div class="field">
+          <label>服務位址</label>
+          <div class="field-row">
+            <input type="text" id="f-local-url" placeholder="http://127.0.0.1:11434/v1">
+            <button id="btn-detect" class="btn btn-ghost" type="button">自動偵測</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>模型名稱</label>
+          <input type="text" id="f-local-model" list="local-models" placeholder="qwen2.5-coder:14b">
+          <datalist id="local-models"></datalist>
+        </div>
+        <p class="note">小模型不熟 XS 語法，寫出來常編譯不過。挑 14B 以上、擅長程式的模型會好很多。</p>
+      </div>
+
+      <div class="test-result" id="test-result" hidden></div>
+    </div>
+
+    <footer class="modal-foot">
+      <button id="btn-test" class="btn btn-ghost" type="button">測試連線</button>
+      <button id="btn-save" class="btn btn-primary" type="button">儲存並開始</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ── 使用說明 ───────────────────────────────────────────────── -->
+<div id="help" class="modal" hidden>
+  <div class="modal-card modal-card-narrow" role="dialog" aria-modal="true">
+    <header class="modal-head">
+      <h2>使用說明</h2>
+      <button class="icon-btn" data-close-help type="button" aria-label="關閉">✕</button>
+    </header>
+    <div class="modal-body prose">
+      <h3>怎麼開始</h3>
+      <p>直接用講話的方式描述你的策略。講得越具體，寫出來越接近你要的：
+         什麼商品、什麼頻率、進場條件、出場條件、要不要停損。</p>
+      <h3>寫好之後怎麼放進 XQ</h3>
+      <ol>
+        <li>按腳本區塊右上角的<strong>複製</strong>，或存成 <code>.xs</code> 檔。</li>
+        <li>打開 XQ 全球贏家 →「XS 語法編輯器」，貼上。</li>
+        <li>按 <strong>F6</strong> 編譯。編不過就把錯誤訊息整段貼回來給軍師，他會修。</li>
+        <li>編譯成功後，依腳本類型加進指標／雷達／選股中心／自動交易。</li>
+      </ol>
+      <h3>軍師只認 XQ 官方資料</h3>
+      <p>回答一律以本機掛載的 XS 知識庫為準——官方欄位手冊、函數手冊與近 400 支官方範例腳本。
+         查不到的東西他會直說查不到，不會編一個看起來很像的函數名給你。</p>
+      <h3>換 AI 連線</h3>
+      <p>側欄「AI 連線」那一列點下去就能改，隨時可以換成別條路線。</p>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-primary" data-close-help type="button">知道了</button>
+    </footer>
+  </div>
+</div>
+
+<script src="/static/app.js?v={{ version }}"></script>
+</body>
+</html>

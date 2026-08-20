@@ -1,0 +1,21 @@
+# 金鑰：永遠不進版控
+secrets.json
+
+# 使用者本機設定（每台機器不同）
+config.json
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 打包產物
+build/
+dist/
+*.spec.bak
+
+# 舊安裝包的說明檔，只作來源存查
+_origin/
+
+# PyInstaller 產生的 spec（build.py 每次重新產生，不需版控）
+*.spec

@@ -1,0 +1,72 @@
+# WORKLOG — XS 工坊 XS Studio
+
+## 2026-08-21 立案並完成 v0.1.0
+
+### 做了什麼
+
+從 `Downloads/xs-skill.zip` 開案，做出一個獨立的 XS 撰寫前台。
+
+- **解壓縮轉碼**：zip 內檔名是 cp950，直接解會變亂碼（`XSAI��Ʈw`）。
+  解壓時逐檔 `encode('cp437').decode('cp950')` 轉回「XSAI資料庫」。
+- **知識庫檢索層**（`xs/knowledge.py`）：17 檔切成 2764 筆原子段落，
+  建索引 23 ms、單次檢索 7–24 ms。分常駐層（23K 字）與檢索層（限 8 筆／45K 字）。
+- **`[LOOKUP]` 二段檢索**：補回 Claude Code 才有的 grep 能力，讓四種後端品質一致。
+- **四後端 ＋ 連線嚮導**：LLM 層改編自萬界 `omni/llm.py`，Windows 地雷沿用其解法。
+- **介面**：深色交易工具調性，色票沿用 XQ 深色 fintech 家族（xq-photocard）。
+- **兩種分發**：綠色免安裝 EXE（324 MB）＋ 輕量 zip（0.4 MB）。
+
+### 驗收紀錄
+
+實跑正式路徑，不用簡化腳本代替：
+
+- 端到端對話（Claude Code SDK）：首字 5.3 s、全長 29.6 s、2036 字。
+  產出的選股腳本符合四大區塊、`getfield` 補 `default:=0`、跨頻率取前期直接對函數
+  加中括號——兩條最容易寫錯的鐵則都守住了，並附來源標註。
+- `tests/test_chat_flow.py` 7 項全過；`tests/test_oai_stream.py` 4 項全過。
+- Playwright 桌面／手機截圖驗收，console 0 錯誤。
+- 打包產物：模擬 frozen 狀態實跑 dist 內容，頁面 200、靜態檔 200、知識庫讀到
+  EXE 旁那份。
+
+### 過程中修掉的缺陷
+
+視覺驗收（截圖）抓到四個，都不是「有點怪」而是真缺陷：
+
+1. **程式碼區塊每一行都被畫成小方框** — `.msg-body code` 的行內樣式漏進了
+   `pre > code`。補 `.code-block pre code{background:none;border:0;padding:0}`。
+2. **引言列的 `>` 原樣顯示、沒有樣式** — markdown 解析在 `escapeHtml` 之後才跑，
+   此時 `>` 已經是 `&gt;`，`^>` 的比對永遠不成立。改比對 `^&gt;`。
+3. **窄螢幕輸入框被擠出畫面、內容被蓋住** — `.main{height:100vh}` 在
+   `grid-template-rows:auto 1fr` 的列裡會超出列高。改 `height:100%` ＋ `min-height:0`。
+4. **窄螢幕頂列硬塞整個側欄，擠成一團還被裁切** — 改成只留品牌／開新對話／連線狀態。
+
+另外修掉：Flask 3 已移除 `JSON_AS_ASCII`（改用 `app.json.ensure_ascii`）、
+favicon 404、EXE 主控台輸出在 cp950 下是亂碼（啟動時 `SetConsoleOutputCP(65001)`）。
+
+### 兩個影響決策的發現
+
+**1. 未簽章 EXE 被 Smart App Control 直接封鎖（WinError 4551）。**
+本機 SAC 為強制模式，連續三次重試皆被擋。打包產物本身沒問題（已另行驗證），
+被擋的是 Windows 執行政策。因此保留輕量 zip 作為今天就能發的路線，
+而不是只做 EXE。查證後補充：台灣公司不符合 Azure Artifact Signing 資格，
+要簽章得走傳統 CA 的 OV 憑證；且 EV 自 2024-03 起已無 SmartScreen 即時信任特權，
+不必為此多付錢。詳見 DISTRIBUTION.md。
+
+**2. `claude-agent-sdk` 內含完整 Claude Code 執行檔（230 MB）。**
+原本只當作體積負擔，實際上是推廣的關鍵資產——有 Claude 訂閱但沒裝過 Claude Code
+的人，不必先裝 Node、不必碰終端機，登入一次就能用。
+已把 `_find_claude_cli()` 改成「先用使用者自己裝的，沒有才用內附那份」，
+並用 `claude auth status`（回 JSON）做真實登入狀態偵測、`claude auth login` 做一鍵登入。
+
+### 未完成 / 未驗證
+
+- **EXE 雙擊啟動未能驗收** — 被 SAC 擋住，需簽章後才驗得了。
+- **Anthropic API 與 OpenRouter 未用真實金鑰實測** — 手上沒有金鑰。
+  兩者共用的串流解析與錯誤處理已用假端點驗過，但真實服務的回應細節未對照。
+- **本地模型未接真實 Ollama 實測** — 本機沒跑推論服務，偵測與串流以假端點驗證。
+
+### 下一步候選
+
+1. 取得 OV 簽章憑證並把簽章接進 `build.py`（對外推廣的前置）
+2. 範例腳本畫廊——素材已在 `knowledge/`，只差一個列表頁
+3. 對話存檔（目前重開就沒了）
+4. 腳本說明區帶來源註記，讓 `.xs` 檔自己帶傳播
