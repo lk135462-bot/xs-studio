@@ -35,7 +35,8 @@ DIST = ROOT / "dist"
 NAME = "XS 工坊"
 
 # 輕量版要帶的東西。secrets.json / config.json 絕不進包——那是本機個人資料。
-LITE_FILES = ["app.py", "requirements.txt", "README.md", "啟動 XS 工坊.bat"]
+LITE_FILES = ["app.py", "requirements.txt", "README.md", "啟動 XS 工坊.bat",
+              "sitecustomize.py"]
 LITE_DIRS = ["xs", "templates", "static", "knowledge"]
 LITE_EXCLUDE = {"__pycache__", ".pytest_cache"}
 
@@ -74,19 +75,32 @@ echo   ※ 保持此視窗開啟＝運行中；關掉這個視窗就結束。
 echo ============================================================
 echo.
 
-if not exist "%~dp0python\python.exe" (
-    echo [錯誤] 找不到內附的 Python，安裝包可能不完整。
-    echo 請重新解壓縮一次完整的壓縮檔。
+if not exist "%~dp0python.exe" (
+    echo [錯誤] 找不到程式檔案。
+    echo.
+    echo   最常見的原因：你是在「壓縮檔裡面」直接點的。
+    echo   請先把壓縮檔解壓縮出來，再打開解壓縮後的資料夾點一次。
+    echo.
     pause
     exit /b 1
 )
 
-"%~dp0python\python.exe" "%~dp0app.py"
+"%~dp0python.exe" "%~dp0app.py"
 
 echo.
 echo XS 工坊已結束。按任意鍵關閉視窗。
 pause >nul
 """
+
+
+def _write_readme(src: Path, dst: Path):
+    """使用說明用 CRLF ＋ BOM 寫出去。
+
+    使用者多半是用記事本打開它。沒有 BOM 中文會變亂碼，沒有 CRLF 整份會擠成一行——
+    兩個都是「第一眼就毀掉信任」的那種問題。
+    """
+    text = src.read_text(encoding="utf-8").replace(CRLF, LF).replace(LF, CRLF)
+    dst.write_bytes(text.encode("utf-8-sig"))
 
 
 def _write_bat(path: Path, text: str):
@@ -129,6 +143,7 @@ def build_lite():
         shutil.copytree(ROOT / name, stage / name,
                         ignore=shutil.ignore_patterns(*LITE_EXCLUDE, "*.pyc"))
     _write_bat(stage / "建立桌面捷徑.bat", SHORTCUT_BAT_LITE)
+    _write_readme(ROOT / "使用說明.txt", stage / "使用說明.txt")
 
     out = DIST / ("%s-輕量版.zip" % NAME)
     _zip(stage, out, NAME)
@@ -147,9 +162,17 @@ def build_portable():
         本方案       只用別人已經簽好、且信譽良好的執行檔：
                      python.exe 由 Python Software Foundation 經 DigiCert 簽章，
                      claude.exe 由 Anthropic, PBC 以 EV 憑證簽章（實測皆 Valid）。
-                     我們自己只出 .py 與 .bat——都不是可執行映像，不受該政策管轄。
 
-    使用者體驗跟綠色版一樣：解壓縮、雙擊、就開了，不必裝 Python。
+    **啟動點是那支已簽章的 exe 本身，不是 .bat。** 這一點是必要的，不是講究：
+    從網路下載的檔案會被蓋上 Mark of the Web，實測帶著這個標記的
+    .bat／.cmd／.lnk 在開啟 Smart App Control 的機器上**一律被封鎖**，
+    而已簽章的 python.exe 照常執行。所以把 python.exe 複製一份改名成
+    「XS 工坊.exe」（改名不影響簽章），搭配同名的 ._pth 與 sitecustomize.py
+    做到雙擊即開——使用者不必知道「右鍵→內容→解除封鎖」這種事。
+
+    Python 執行期直接攤平在資料夾根目錄（不放 python/ 子目錄），
+    因為那支 exe 必須跟 python311.dll 同層才找得到它。攤平出來的雜項檔案
+    會設成隱藏屬性，使用者打開資料夾只會看到啟動器與知識庫。
     """
     print("\n-- 免安裝版（內嵌 Python）----------------------")
     out_dir = DIST / ("%s-免安裝" % NAME)
@@ -168,7 +191,8 @@ def build_portable():
         print("  下載 %s" % url)
         import urllib.request
         urllib.request.urlretrieve(url, cache)
-    py_dir = out_dir / "python"
+    # 攤平在根目錄：啟動器 exe 必須與 python311.dll 同層
+    py_dir = out_dir
     with zipfile.ZipFile(cache) as z:
         z.extractall(py_dir)
     print("  內嵌 Python %s" % ver)
@@ -222,8 +246,24 @@ def build_portable():
         shutil.copytree(ROOT / name, out_dir / name,
                         ignore=shutil.ignore_patterns(*LITE_EXCLUDE, "*.pyc"))
 
-    _write_bat(out_dir / ("啟動 %s.bat" % NAME), PORTABLE_BAT)
-    _write_bat(out_dir / "建立桌面捷徑.bat", SHORTCUT_BAT_PORTABLE)
+    _write_readme(ROOT / "使用說明.txt", out_dir / "使用說明.txt")
+
+    # 5) 啟動器：把已簽章的 python.exe 複製一份改名。
+    #    改名不影響 Authenticode（簽的是內容不是檔名，已驗），
+    #    但 Python 會改去找「跟執行檔同名」的 ._pth，所以那份要一起產。
+    launcher = out_dir / ("%s.exe" % NAME)
+    shutil.copy2(out_dir / "python.exe", launcher)
+    (out_dir / ("%s._pth" % NAME)).write_text(
+        LF.join(["python%d%d.zip" % sys.version_info[:2], ".",
+                 "Lib\\site-packages", "import site", ""]), encoding="ascii")
+
+    # 備援啟動器：萬一哪台機器的 exe 啟動器出狀況，還有一條路可以走。
+    # 它從網路下載後可能被 Mark of the Web 擋，所以只是備援不是主力。
+    _write_bat(out_dir / "備援啟動（若主程式打不開再用）.bat", PORTABLE_BAT)
+
+    # 註：執行期雜項的「隱藏」不在這裡做——zip 格式不保留 Windows 隱藏屬性，
+    #     解壓縮出來還是會全部露出來（實測 47 個可見項目）。
+    #     改由 app.py 的 _tidy_folder() 在首次啟動時整理。
 
     unsigned = _audit_signatures(out_dir)
     print("  資料夾：%s（%.0f MB）" % (out_dir, _mb(out_dir)))
@@ -238,7 +278,7 @@ def build_portable():
     print("  壓縮中…")
     _zip(out_dir, out_zip, NAME)
     print("  產出：%s（%.0f MB）" % (out_zip, _mb(out_zip)))
-    print("  給使用者：解壓縮 → 雙擊「啟動 XS 工坊.bat」（不必先裝任何東西）")
+    print("  給使用者：解壓縮 → 雙擊「%s.exe」（不必先裝任何東西）" % NAME)
     return out_dir
 
 

@@ -74,6 +74,12 @@ OpenRouter、本地模型——那些後端沒有檔案工具。所以由伺服�
 **中文檢索用 n-gram，不引入斷詞套件。** 免安裝包要維持零額外相依。
 2764 筆記錄線性掃描實測 7–24 ms，沒有引入索引結構的必要。
 
+**啟動點必須是已簽章的執行檔，不能是 .bat。**
+從網路下載的檔案帶 Mark of the Web，且檔案總管解壓縮會把標記傳給每個檔案。
+實測：帶 MOTW 的 `.bat`／`.cmd`／`.lnk` 在 Smart App Control 下**一律被封鎖**，
+只有已簽章的 `python.exe` 照常執行。所以啟動器是 `python.exe` 的副本改名
+（改名不影響簽章），搭配同名 `._pth` 與 `sitecustomize.py` 做到雙擊即開。
+
 **發行不自己產生執行檔。** Windows 11 的 Smart App Control 會封鎖未簽章、
 無信譽的可執行映像（PyInstaller 的 bootloader 正是這種）。免安裝版因此只用
 別人已簽好的執行檔——python.exe（Python Software Foundation／DigiCert）與
@@ -105,6 +111,8 @@ npm 安裝得到的正是 `claude.cmd`，照直覺「使用者自己裝的優先
 | 簽章稽核 | 打包時逐支 `.exe` 查 Authenticode | 通過：零未簽章執行檔 |
 | **完整操作情境** | Playwright 驅動免安裝版走完九步（首開→嚮導→測試連線→起手式→寫腳本→複製→追加條件→存檔→重開） | **通過**：零前端錯誤；寫腳本 28.3 s、追加條件 23.4 s |
 | **交付檔格式** | 下載的 `.xs` 檢查 BOM／換行／內容 | 通過（修掉 LF-only 缺陷後：BOM ＋ 全 CRLF ＋ 一字不差） |
+| **真實下載情境** | 出貨 zip 蓋上 Mark of the Web → 檔案總管式解壓縮 → 雙擊啟動器 | **通過**：HTTP 200、知識庫掛載；`.bat`／`.cmd`／`.lnk` 在同條件下皆被封鎖，只有已簽章 exe 可行 |
+| **首次啟動整理** | 解壓縮後可見項目數 | 通過：47 項 → 5 項 |
 | PyInstaller EXE 啟動 | 雙擊 | **仍未通過**——Smart App Control 封鎖未簽章執行檔（WinError 4551）。已改用免安裝版繞過，見 DISTRIBUTION.md |
 
 **未驗證項目（誠實記錄）**：Anthropic API 與 OpenRouter 兩條路線的實際線上呼叫

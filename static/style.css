@@ -110,6 +110,7 @@ button{cursor:pointer}
 }
 .linkish{background:none;border:0;color:var(--primary);font-size:11px;padding:0}
 .linkish:hover{text-decoration:underline}
+.foot-sep{color:var(--line-2);margin:0 4px}
 
 /* ── 按鈕 ─────────────────────────────────────────────────── */
 .btn{

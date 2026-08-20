@@ -126,6 +126,57 @@ def api_probe():
     })
 
 
+@app.route("/api/shortcut", methods=["POST"])
+def api_shortcut():
+    """在桌面建立捷徑。
+
+    本來是給一支「建立桌面捷徑.bat」，但從網路下載的 .bat 帶著 Mark of the Web
+    會被 Windows 封鎖（實測），使用者反而卡住。改成從介面按一下，
+    由已經在跑的程式自己建——這條路徑不受那個政策管轄。
+    """
+    if os.name != "nt":
+        return jsonify({"ok": False, "error": "這個功能只在 Windows 上有用"})
+    target = _launcher_path()
+    if not target:
+        return jsonify({"ok": False, "error": "找不到啟動器",
+                        "hint": "你可能是用原始碼跑的；請直接把啟動檔拖到桌面。"})
+    desktop = Path(os.path.expandvars("%USERPROFILE%")) / "Desktop"
+    lnk = desktop / (APP_NAME.split()[0] + ".lnk")
+    ps = (
+        "$s=(New-Object -COM WScript.Shell).CreateShortcut('%s');"
+        "$s.TargetPath='%s';$s.WorkingDirectory='%s';"
+        "$s.Description='XS 工坊 — XQ 腳本軍師';$s.Save()"
+        % (str(lnk).replace("'", "''"), str(target).replace("'", "''"),
+           str(target.parent).replace("'", "''"))
+    )
+    try:
+        import subprocess
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                       capture_output=True, timeout=60)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "建立失敗：" + str(e)})
+    if lnk.exists():
+        return jsonify({"ok": True, "path": str(lnk)})
+    return jsonify({"ok": False, "error": "建立失敗",
+                    "hint": "你也可以直接把啟動器拖到桌面，Windows 會問要不要建立捷徑。"})
+
+
+def _launcher_path():
+    """找出這一份安裝要點的那個啟動檔，給桌面捷徑用。"""
+    root = data_dir()
+    for name in (APP_NAME.split()[0] + " " + APP_NAME.split()[1] + ".exe",
+                 "XS 工坊.exe"):
+        p = root / name
+        if p.exists():
+            return p
+    for p in sorted(root.glob("*.exe")):
+        if not p.name.lower().startswith("python"):
+            return p
+    for p in sorted(root.glob("啟動*.bat")):
+        return p
+    return None
+
+
 @app.route("/api/claude_login", methods=["POST"])
 def api_claude_login():
     """另開終端機跑 Claude 登入。互動流程不代跑，只負責把視窗開起來。"""
@@ -262,6 +313,45 @@ def pick_port(start=DEFAULT_PORT, scan=PORT_SCAN):
     return None
 
 
+# 使用者該看到的東西。其餘一律在首次啟動時隱藏。
+_VISIBLE = {"knowledge", "使用說明.txt", "README.md",
+            "備援啟動（若主程式打不開再用）.bat", "config.json", "secrets.json"}
+
+
+def _tidy_folder():
+    """首次啟動時把執行期檔案設成隱藏，讓資料夾只剩使用者要點的東西。
+
+    為什麼不在打包時做：zip 格式不會保留 Windows 的隱藏屬性，
+    使用者解壓縮出來還是會看到 47 個看不懂的檔案（實測）。所以只能等程式跑起來自己整理。
+    對電腦新手來說這件事有意義——一打開就是一整片 .pyd/.dll，
+    第一反應是不敢動，或點錯一個然後以為程式壞了。
+
+    隱藏是可逆的（檔案總管開「顯示隱藏項目」就看得到），不是刪除。
+    """
+    if os.name != "nt":
+        return
+    root = data_dir()
+    launcher = root / (APP_NAME.split()[0] + " " + APP_NAME.split()[1] + ".exe")
+    if not launcher.exists():
+        return          # 不是免安裝版的版面（原始碼跑法），不要亂動人家的資料夾
+    import subprocess
+    hidden = 0
+    for item in root.iterdir():
+        if item.name in _VISIBLE or item == launcher:
+            continue
+        try:
+            if os.stat(item).st_file_attributes & 2:      # FILE_ATTRIBUTE_HIDDEN
+                continue
+            subprocess.run(["attrib", "+H", str(item)], capture_output=True,
+                           timeout=20,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            hidden += 1
+        except Exception:
+            pass        # 整理失敗不該擋住啟動，頂多是資料夾比較亂
+    if hidden:
+        print("  （已把 %d 個程式檔設為隱藏，資料夾只留你要用的東西）" % hidden)
+
+
 def _fix_console_encoding():
     """讓主控台吃得下中文。
 
@@ -285,6 +375,7 @@ def _fix_console_encoding():
 
 def main():
     _fix_console_encoding()
+    _tidy_folder()
     port = pick_port()
     if port is None:
         print("[錯誤] 找不到可用的連接埠（已試 %d–%d）。"
