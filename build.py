@@ -21,6 +21,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+LF, CRLF = chr(10), chr(13) + chr(10)
+
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 NAME = "XS 工坊"
@@ -51,6 +53,17 @@ pause
 SHORTCUT_BAT_LITE = SHORTCUT_BAT.replace("XS 工坊.exe", "啟動 XS 工坊.bat")
 
 
+def _write_bat(path: Path, text: str):
+    """批次檔一律寫成 CRLF。
+
+    Windows 的 cmd.exe 解析 .bat 需要 CRLF；只有 LF 會讓它把第一行讀壞、
+    整支檔案跑不起來（實測第一行會變成 '???echo'）。Python 預設寫 LF，
+    所以這裡要明講。
+    """
+    normalized = text.replace(CRLF, LF).replace(LF, CRLF)
+    path.write_bytes(normalized.encode("utf-8"))
+
+
 def _mb(path: Path) -> float:
     if path.is_file():
         return path.stat().st_size / 1048576
@@ -79,7 +92,7 @@ def build_lite():
     for name in LITE_DIRS:
         shutil.copytree(ROOT / name, stage / name,
                         ignore=shutil.ignore_patterns(*LITE_EXCLUDE, "*.pyc"))
-    (stage / "建立桌面捷徑.bat").write_text(SHORTCUT_BAT_LITE, encoding="utf-8")
+    _write_bat(stage / "建立桌面捷徑.bat", SHORTCUT_BAT_LITE)
 
     out = DIST / ("%s-輕量版.zip" % NAME)
     _zip(stage, out, NAME)
@@ -110,7 +123,7 @@ def build_exe():
 
     # 知識庫刻意不進 --add-data：要留在 EXE 旁邊，使用者看得到、也能補自己的手冊
     shutil.copytree(ROOT / "knowledge", out_dir / "knowledge")
-    (out_dir / "建立桌面捷徑.bat").write_text(SHORTCUT_BAT, encoding="utf-8")
+    _write_bat(out_dir / "建立桌面捷徑.bat", SHORTCUT_BAT)
     for doc in ("README.md",):
         if (ROOT / doc).exists():
             shutil.copy2(ROOT / doc, out_dir / doc)

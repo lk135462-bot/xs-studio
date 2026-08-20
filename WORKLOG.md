@@ -23,6 +23,9 @@
   產出的選股腳本符合四大區塊、`getfield` 補 `default:=0`、跨頻率取前期直接對函數
   加中括號——兩條最容易寫錯的鐵則都守住了，並附來源標註。
 - `tests/test_chat_flow.py` 7 項全過；`tests/test_oai_stream.py` 4 項全過。
+- 迭代模式（貼既有腳本要求改停損）：32.5 s，`[OLD]`/`[NEW]` 對照正確、
+  只動停損那幾行、原有進場邏輯與 `setposition` 保留，未整支重寫。
+- 啟動器實跑：`啟動 XS 工坊.bat` 起得來、中文顯示正常、首頁 HTTP 200。
 - Playwright 桌面／手機截圖驗收，console 0 錯誤。
 - 打包產物：模擬 frozen 狀態實跑 dist 內容，頁面 200、靜態檔 200、知識庫讀到
   EXE 旁那份。
@@ -38,6 +41,13 @@
 3. **窄螢幕輸入框被擠出畫面、內容被蓋住** — `.main{height:100vh}` 在
    `grid-template-rows:auto 1fr` 的列裡會超出列高。改 `height:100%` ＋ `min-height:0`。
 4. **窄螢幕頂列硬塞整個側欄，擠成一團還被裁切** — 改成只留品牌／開新對話／連線狀態。
+
+**第五個、也是最嚴重的一個**：`啟動 XS 工坊.bat` 是 LF 換行。
+Windows 的 cmd.exe 解析 `.bat` 需要 CRLF，只有 LF 會讓它把第一行讀壞
+（實測第一行變成 `'???echo'`），整支檔案跑不起來——**每一個使用者雙擊都會失敗**。
+若不是實際去跑那支 bat 而只是「看起來沒問題」，這個會直接帶進發行版。
+已修：bat 改寫成 CRLF、`build.py` 產生的 bat 走 `_write_bat()`、
+加 `.gitattributes` 鎖 `*.bat text eol=crlf` 防止 git 正規化回 LF。
 
 另外修掉：Flask 3 已移除 `JSON_AS_ASCII`（改用 `app.json.ensure_ascii`）、
 favicon 404、EXE 主控台輸出在 cp950 下是亂碼（啟動時 `SetConsoleOutputCP(65001)`）。

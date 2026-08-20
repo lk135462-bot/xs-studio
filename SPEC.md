@@ -84,6 +84,8 @@ OpenRouter、本地模型——那些後端沒有檔案工具。所以由伺服�
 | OpenAI 相容串流 | `tests/test_oai_stream.py`，4 項（假端點跑真 HTTP） | 全過 |
 | 連線偵測 | `/api/probe` 實跑 `claude auth status` | 通過：回報已登入帳號與訂閱等級 |
 | 介面 | Playwright 桌面 1440／手機 420 截圖 ＋ console 錯誤檢查 | 通過（0 錯誤；修掉 4 項視覺缺陷，見 WORKLOG） |
+| 迭代模式 | 貼既有腳本要求把固定停損改成 ATR 動態停損 | 通過：32.5 s，`[OLD]`/`[NEW]` 對照、最小變更、未整支重寫 |
+| 啟動器 | 實跑 `啟動 XS 工坊.bat` | 通過（修掉 LF 換行導致 cmd 解析失敗的缺陷後） |
 | 打包產物 | 模擬 frozen 狀態實跑 dist 內容 | 通過：頁面 200、靜態檔 200、知識庫讀到 EXE 旁那份 |
 | EXE 啟動 | 雙擊 | **未完成驗收**——本機 Smart App Control 封鎖未簽章執行檔（WinError 4551），見 DISTRIBUTION.md |
 
