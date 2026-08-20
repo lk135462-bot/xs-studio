@@ -1,5 +1,39 @@
 # WORKLOG — XS 工坊 XS Studio
 
+## 2026-08-21（第五輪）對外發布
+
+- **GitHub 公開**：https://github.com/lk135462-bot/xs-studio
+  （先推私有 → 使用者確認後才轉公開，含 `knowledge/`）
+- **Google Drive**：以 **hoganchen@moneydj.com** 上傳至該帳號自己的 Claude-Exchange
+  下的 `XS 工坊` 子資料夾，權限設為 **moneydj.com 網域可讀**。
+
+### 發布前的審計
+
+轉公開是對外的動作，所以先查了三件事：
+
+1. **機密**：版控與完整 git 歷史皆無 `secrets.json`／token／金鑰樣式命中。
+2. **個資／內部資訊**：程式碼與文件無使用者帳號、無路徑硬編碼
+   （僅知識庫內含一則 moneydj.com wiki 連結，屬原始資料）。
+3. **知識庫的性質**：`knowledge/` 是 XQ／MoneyDJ 官方欄位手冊（349 欄位）與約 400 支
+   官方內建範例腳本的整理。查證帳號時另見公司 Drive 上有同仁的
+   `XS-SKILL`（derektu@）與 `_2026_AI_XS選股助手`（cynthiachang@）——
+   XS × AI 在公司內是有人在做的題目。**這一項已提請使用者裁示，使用者選擇連同公開。**
+
+### 一個被使用者糾正的說法
+
+我原本說「開公開不可逆」，這是錯的——GitHub 可見度隨時能改回私有。
+準確的說法是：**設定可逆，曝光不可逆**。依官方文件，轉回私有時公開的 fork
+會被分離到新的網路（fork 本身仍公開存在），且 star 與 watcher 會被永久清除；
+公開期間 clone 過的人手上那份也收不回來。
+**教訓：講風險要講在點上，不要用「不可逆」這種模糊的大詞含混帶過。**
+
+### 驗證
+
+以匿名身分（不帶 token）確認：`private=false`、`raw README.md` 與 `raw app.py` 皆 200、
+`knowledge/` 目錄公開可列。Drive 權限清單確認為 `domain reader moneydj.com` ＋ owner。
+
+---
+
 ## 2026-08-21（第四輪）寫新手說明時，發現真實下載情境本來會失敗
 
 要寫給電腦新手的操作步驟，先去實測「新手最容易踩的坑」實際會發生什麼——
