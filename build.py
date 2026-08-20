@@ -279,7 +279,41 @@ def build_portable():
     _zip(out_dir, out_zip, NAME)
     print("  產出：%s（%.0f MB）" % (out_zip, _mb(out_zip)))
     print("  給使用者：解壓縮 → 雙擊「%s.exe」（不必先裝任何東西）" % NAME)
+    if _mb(out_zip) > 100:
+        print("  [提醒] 超過 100 MB：放 Google Drive 給人下載時會跳"
+              "「無法掃描病毒」警告，要按「仍要下載」。")
+        print("         若這個警告會讓人卻步，改發精簡版（build.py slim）。")
+    _build_slim(out_dir)
     return out_dir
+
+
+def _build_slim(full_dir: Path):
+    """精簡版：跟免安裝版一樣，只是不內附 Claude Code。
+
+    為什麼要有這個版本：內附的 claude.exe 佔掉九成體積，讓壓縮檔衝破 100 MB——
+    而 Google Drive 只掃 100 MB 以下的檔案，超過就會對下載者跳
+    「Google 無法掃描這個檔案是否含有病毒」。那句話對非技術使用者是勸退級的。
+
+    取捨很清楚：
+        完整版  訂閱 Claude 的人零安裝上手，但下載時會看到那句警告
+        精簡版  下載乾淨無警告，但走 Claude 訂閱那條路的人要自己先裝 Claude Code；
+                走 API Key／本地模型的人完全不受影響
+    """
+    slim_dir = DIST / ("%s-精簡" % NAME)
+    if slim_dir.exists():
+        shutil.rmtree(slim_dir)
+    shutil.copytree(full_dir, slim_dir)
+    bundled = slim_dir / "Lib/site-packages/claude_agent_sdk/_bundled"
+    dropped = 0.0
+    if bundled.is_dir():
+        dropped = _mb(bundled)
+        shutil.rmtree(bundled)
+    out_zip = DIST / ("%s-精簡版.zip" % NAME)
+    _zip(slim_dir, out_zip, NAME)
+    print("  精簡版：%s（%.0f MB，省下內附的 Claude Code %.0f MB）"
+          % (out_zip, _mb(out_zip), dropped))
+    shutil.rmtree(slim_dir)          # 資料夾用完就收，只留壓縮檔
+    return out_zip
 
 
 def _audit_signatures(root: Path):
