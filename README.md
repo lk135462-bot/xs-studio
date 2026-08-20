@@ -9,7 +9,7 @@
 
 ## 三十秒上手
 
-1. 雙擊 **`XS 工坊.exe`**（或輕量版的 `啟動 XS 工坊.bat`）
+1. 解壓縮後雙擊 **`啟動 XS 工坊.bat`**
 2. 瀏覽器自動打開，第一次會跳出**連線嚮導**，選一條 AI 路線
 3. 開始講你的策略
 
@@ -65,14 +65,17 @@ AI 服務連線，沒有其他外連。
 
 ```bash
 pip install -r requirements.txt
-python app.py                     # http://127.0.0.1:5101/
+python app.py                       # http://127.0.0.1:5101/
 
-python tests/test_chat_flow.py    # 對話流程（含 [LOOKUP] 二段檢索）
-python tests/test_oai_stream.py   # OpenAI 相容串流解析
+python tests/test_chat_flow.py      # 對話流程（含 [LOOKUP] 二段檢索）
+python tests/test_oai_stream.py     # OpenAI 相容串流解析
+python tests/test_cli_detection.py  # claude 執行檔挑選順序
 
-python build.py lite              # 輕量版 zip
-python build.py exe               # 綠色免安裝版
+python build.py portable            # 免安裝版（內嵌 Python，125 MB zip）← 主力
+python build.py lite                # 輕量版（0.4 MB zip，需自備 Python）
+python build.py all                 # 上面兩種
 ```
 
 程式結構、設計決策與驗收紀錄見 [SPEC.md](SPEC.md)；
-對外發行的門檻與策略見 [DISTRIBUTION.md](DISTRIBUTION.md)。
+發行形態的取捨、為什麼不用 PyInstaller、以及推廣的三道門檻見
+[DISTRIBUTION.md](DISTRIBUTION.md)。

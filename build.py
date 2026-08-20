@@ -1,20 +1,27 @@
 # -*- coding: utf-8 -*-
 """打包分發版。
 
-    python build.py lite     輕量版（~3 MB）：原始碼＋知識庫＋啟動 bat，需使用者自備 Python
-    python build.py exe      綠色免安裝版（~324 MB）：內含 Python 與 Claude Code，雙擊即用
-    python build.py all      兩種都出
+    python build.py portable  免安裝版：內嵌官方 Python，雙擊即用，不必先裝 Python
+    python build.py lite      輕量版（~0.4 MB）：只有原始碼＋知識庫，需使用者自備 Python
+    python build.py all       上面兩種
+    python build.py exe       PyInstaller 版——**未簽章的話發不出去**，見下
 
-兩種並存是有理由的，不是猶豫不決：
+為什麼免安裝版不用 PyInstaller：
 
-  輕量版今天就能發。它跑的是使用者自己那份 python.exe（微軟認得的簽章），
-  不會被 SmartScreen 或 Smart App Control 攔下來。代價是要先裝 Python。
+  PyInstaller 會產生一支我們自己的 bootloader exe。它未簽章、沒有信譽，
+  Windows 11 開著 Smart App Control 的機器會**直接封鎖**（實測 WinError 4551，
+  不是跳警告是打不開），其餘機器也至少跳一次 SmartScreen。
 
-  綠色版體驗最好、也是要推廣的目標形態，但**未簽章的執行檔在 Windows 11
-  開啟 Smart App Control 的機器上會被直接封鎖**（WinError 4551），
-  一般機器則至少跳一次 SmartScreen 警告。要真正對外推，需要程式碼簽章憑證。
-  詳見 DISTRIBUTION.md。
+  免安裝版改成只用「別人已經簽好且信譽良好」的執行檔——
+  python.exe 由 Python Software Foundation 經 DigiCert 簽章、
+  claude.exe 由 Anthropic, PBC 以 EV 憑證簽章（實測皆 Valid）。
+  我們自己只出 .py 與 .bat，都不是可執行映像，不受該政策管轄。
+  使用者體驗一樣是解壓縮、雙擊、就開了。
+
+  `build.py exe` 保留給「已經有程式碼簽章憑證」的情況，所以不列入 all。
+  憑證取得途徑見 DISTRIBUTION.md。
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -51,6 +58,35 @@ pause
 """
 
 SHORTCUT_BAT_LITE = SHORTCUT_BAT.replace("XS 工坊.exe", "啟動 XS 工坊.bat")
+SHORTCUT_BAT_PORTABLE = SHORTCUT_BAT_LITE
+
+# 免安裝版的啟動器：直接用包內那份 Python，不碰使用者系統上的任何東西
+PORTABLE_BAT = """@echo off
+chcp 65001 >nul
+cd /d "%~dp0"
+title XS 工坊 XS Studio
+
+echo ============================================================
+echo   XS 工坊 XS Studio
+echo   啟動中，稍候會自動開啟瀏覽器…
+echo.
+echo   ※ 保持此視窗開啟＝運行中；關掉這個視窗就結束。
+echo ============================================================
+echo.
+
+if not exist "%~dp0python\python.exe" (
+    echo [錯誤] 找不到內附的 Python，安裝包可能不完整。
+    echo 請重新解壓縮一次完整的壓縮檔。
+    pause
+    exit /b 1
+)
+
+"%~dp0python\python.exe" "%~dp0app.py"
+
+echo.
+echo XS 工坊已結束。按任意鍵關閉視窗。
+pause >nul
+"""
 
 
 def _write_bat(path: Path, text: str):
@@ -101,8 +137,156 @@ def build_lite():
     return out
 
 
+def build_portable():
+    """免安裝版：內嵌 Python 官方 embeddable 版，整包沒有任何未簽章執行檔。
+
+    這是 PyInstaller 那條路撞牆之後找到的正解。差別在「誰的執行檔」：
+
+        PyInstaller  產生一支我們自己的 bootloader exe——未簽章、沒有信譽，
+                     Windows 11 開著 Smart App Control 的機器直接封鎖（WinError 4551）。
+        本方案       只用別人已經簽好、且信譽良好的執行檔：
+                     python.exe 由 Python Software Foundation 經 DigiCert 簽章，
+                     claude.exe 由 Anthropic, PBC 以 EV 憑證簽章（實測皆 Valid）。
+                     我們自己只出 .py 與 .bat——都不是可執行映像，不受該政策管轄。
+
+    使用者體驗跟綠色版一樣：解壓縮、雙擊、就開了，不必裝 Python。
+    """
+    print("\n-- 免安裝版（內嵌 Python）----------------------")
+    out_dir = DIST / ("%s-免安裝" % NAME)
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+
+    # 1) 取得官方 embeddable 版。版本鎖成建置機的版本，wheel 的 ABI 才對得上。
+    ver = "%d.%d.%d" % sys.version_info[:3]
+    tag = "cp%d%d" % sys.version_info[:2]
+    cache = DIST / ("_cache/python-%s-embed-amd64.zip" % ver)
+    if not cache.exists():
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        url = ("https://www.python.org/ftp/python/%s/python-%s-embed-amd64.zip"
+               % (ver, ver))
+        print("  下載 %s" % url)
+        import urllib.request
+        urllib.request.urlretrieve(url, cache)
+    py_dir = out_dir / "python"
+    with zipfile.ZipFile(cache) as z:
+        z.extractall(py_dir)
+    print("  內嵌 Python %s" % ver)
+
+    # 2) embeddable 版預設不吃 site-packages，要把它打開，否則裝好的套件 import 不到
+    pth = next(py_dir.glob("python*._pth"))
+    pth.write_text("python%d%d.zip\n.\nLib\\site-packages\nimport site\n"
+                   % sys.version_info[:2], encoding="ascii")
+
+    # 3) 相依裝進去。用 --target 而不是 venv：embeddable 版沒有 venv 模組。
+    site_dir = py_dir / "Lib" / "site-packages"
+    print("  安裝相依套件…")
+    r = subprocess.run([sys.executable, "-m", "pip", "install",
+                        "--disable-pip-version-check", "-q",
+                        "--target", str(site_dir),
+                        "--only-binary", ":all:",
+                        "--python-version", ver, "--implementation", "cp",
+                        "--abi", tag, "--platform", "win_amd64",
+                        "-r", "requirements.txt"], cwd=str(ROOT))
+    if r.returncode != 0:
+        sys.exit("相依套件安裝失敗")
+
+    # 3b) 清掉 site-packages 裡所有「未簽章」的 .exe。
+    #     整包唯一會被執行的是 python.exe（我們的啟動器）與 claude.exe（SDK 呼叫），
+    #     兩者都有有效簽章。其餘的（pip 產生的 flask.exe/uvicorn.exe 殼、
+    #     pywin32 的 Pythonwin.exe/pythonservice.exe）我們一支都不跑，
+    #     留著只會讓整包不再是「零未簽章執行檔」，白白給 SAC 攔截的理由。
+    shims = site_dir / "bin"
+    if shims.is_dir():
+        shutil.rmtree(shims)
+    removed = 0
+    for path, _status in _audit_signatures(site_dir):
+        if path.is_file():
+            path.unlink()
+            removed += 1
+    if removed:
+        print("  移除 %d 支未簽章且用不到的執行檔" % removed)
+    # 順手清掉測試與快取，這些不該進發行包
+    for junk in list(site_dir.rglob("__pycache__")) + list(site_dir.rglob("tests")):
+        if junk.is_dir():
+            shutil.rmtree(junk, ignore_errors=True)
+
+    # 4) 應用程式本體
+    for name in LITE_FILES:
+        if name.endswith(".bat"):
+            continue                      # 免安裝版有自己的啟動器，不用輕量版那支
+        src = ROOT / name
+        if src.exists():
+            shutil.copy2(src, out_dir / name)
+    for name in LITE_DIRS:
+        shutil.copytree(ROOT / name, out_dir / name,
+                        ignore=shutil.ignore_patterns(*LITE_EXCLUDE, "*.pyc"))
+
+    _write_bat(out_dir / ("啟動 %s.bat" % NAME), PORTABLE_BAT)
+    _write_bat(out_dir / "建立桌面捷徑.bat", SHORTCUT_BAT_PORTABLE)
+
+    unsigned = _audit_signatures(out_dir)
+    print("  資料夾：%s（%.0f MB）" % (out_dir, _mb(out_dir)))
+    if unsigned:
+        print("  [警告] 仍有未簽章執行檔，SAC 可能攔截：")
+        for path, status in unsigned[:10]:
+            print("         %s -> %s" % (path.relative_to(out_dir), status))
+    else:
+        print("  [OK] 包內所有 .exe 皆為有效簽章，不會被 Smart App Control 封鎖。")
+
+    out_zip = DIST / ("%s-免安裝版.zip" % NAME)
+    print("  壓縮中…")
+    _zip(out_dir, out_zip, NAME)
+    print("  產出：%s（%.0f MB）" % (out_zip, _mb(out_zip)))
+    print("  給使用者：解壓縮 → 雙擊「啟動 XS 工坊.bat」（不必先裝任何東西）")
+    return out_dir
+
+
+def _audit_signatures(root: Path):
+    """清點 root 底下每一支 .exe 的簽章，回傳 [(Path, 狀態), …]，只含非 Valid 的。
+
+    這個檢查是本方案的核心保證，所以每次打包都跑一遍，不靠記憶宣稱「應該都簽了」。
+
+    路徑用「索引」對回，不讓 PowerShell 把路徑吐回來——它的 stdout 走的是主控台
+    編碼（本機 cp950），中文資料夾名一往返就變亂碼，Path 再也對不上實體檔案。
+    踩過一次：清理程式因此一支都沒刪掉，卻不會報錯。
+    """
+    exes = sorted(root.rglob("*.exe"))
+    if not exes:
+        return []
+    # 路徑清單走 UTF-8 暫存檔進去，回來只帶「第幾支 + 狀態」
+    import tempfile
+    fd, listfile = tempfile.mkstemp(suffix=".txt")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("\n".join(str(p) for p in exes))
+    script = (
+        "$ErrorActionPreference='Stop';"
+        "$paths=[IO.File]::ReadAllLines('%s',[Text.Encoding]::UTF8);"
+        "for($i=0;$i -lt $paths.Count;$i++){"
+        "  $s=Get-AuthenticodeSignature -LiteralPath $paths[$i];"
+        "  if($s.Status -ne 'Valid'){Write-Output ($i.ToString()+'|'+$s.Status)}}"
+        % listfile.replace("'", "''"))
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", script],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=600)
+    finally:
+        try:
+            os.unlink(listfile)
+        except OSError:
+            pass
+    out = []
+    for line in (r.stdout or "").splitlines():
+        if "|" not in line:
+            continue
+        idx, _, status = line.strip().partition("|")
+        if idx.isdigit() and int(idx) < len(exes):
+            out.append((exes[int(idx)], status))
+    return out
+
+
 def build_exe():
-    print("\n-- 綠色免安裝版 --------------------------------")
+    print("\n-- PyInstaller 版（需簽章才發得出去）------------")
     out_dir = DIST / NAME
     for stale in (ROOT / "build", out_dir):
         if stale.exists():
@@ -137,11 +321,14 @@ def build_exe():
 
 def main():
     target = (sys.argv[1] if len(sys.argv) > 1 else "all").lower()
-    if target not in ("lite", "exe", "all"):
+    if target not in ("lite", "portable", "exe", "all"):
         sys.exit(__doc__)
     if target in ("lite", "all"):
         build_lite()
-    if target in ("exe", "all"):
+    if target in ("portable", "all"):
+        build_portable()
+    if target == "exe":
+        # 刻意不進 all：未簽章的 PyInstaller 產物發不出去，要用得先有憑證
         build_exe()
     print("\n完成。")
 

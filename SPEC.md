@@ -17,7 +17,7 @@ Claude Code。
 - 本機 Flask 伺服器（127.0.0.1:5101，被占用會自動往上找）＋ 瀏覽器對話介面
 - 自動掛載 `knowledge/` 的 XS 知識庫，並在伺服器側做段落檢索
 - 四種 AI 後端可切換，附首次啟動的連線嚮導與實際連線測試
-- 兩種分發形態：綠色免安裝 EXE、輕量 zip
+- 兩種分發形態：免安裝版（內嵌官方 Python，零未簽章執行檔）、輕量 zip
 
 **不做**
 - 不直接操作 XQ 全球贏家（那是 `xq-desktop-operator` Skill 的守備範圍）
@@ -70,8 +70,19 @@ OpenRouter、本地模型——那些後端沒有檔案工具。所以由伺服�
 伺服器會扣住回應開頭直到確認不是查詢指令才放行，使用者看不到這個內部往返，
 只看到「軍師正在翻手冊…」。
 
-**中文檢索用 n-gram，不引入斷詞套件。** 綠色免安裝包要維持零額外相依。
+**中文檢索用 n-gram，不引入斷詞套件。** 免安裝包要維持零額外相依。
 2764 筆記錄線性掃描實測 7–24 ms，沒有引入索引結構的必要。
+
+**發行不自己產生執行檔。** Windows 11 的 Smart App Control 會封鎖未簽章、
+無信譽的可執行映像（PyInstaller 的 bootloader 正是這種）。免安裝版因此只用
+別人已簽好的執行檔——python.exe（Python Software Foundation／DigiCert）與
+claude.exe（Anthropic, PBC／EV），我們自己只出 `.py` 與 `.bat`。
+打包時會逐支稽核簽章，不通過就示警。
+
+**`claude` 執行檔優先原生 `.exe`，絕不把 `.cmd` 交給 SDK。**
+`claude-agent-sdk` 自 0.2.142 起拒絕執行 `.bat`／`.cmd`（安全設計）。
+npm 安裝得到的正是 `claude.cmd`，照直覺「使用者自己裝的優先」會讓新版 SDK 整條斷掉。
+順序：原生 exe → 內附 exe → 最後才是 `.cmd`，由 `tests/test_cli_detection.py` 鎖住。
 
 ## 驗收
 
@@ -87,11 +98,16 @@ OpenRouter、本地模型——那些後端沒有檔案工具。所以由伺服�
 | 迭代模式 | 貼既有腳本要求把固定停損改成 ATR 動態停損 | 通過：32.5 s，`[OLD]`/`[NEW]` 對照、最小變更、未整支重寫 |
 | 啟動器 | 實跑 `啟動 XS 工坊.bat` | 通過（修掉 LF 換行導致 cmd 解析失敗的缺陷後） |
 | 打包產物 | 模擬 frozen 狀態實跑 dist 內容 | 通過：頁面 200、靜態檔 200、知識庫讀到 EXE 旁那份 |
-| EXE 啟動 | 雙擊 | **未完成驗收**——本機 Smart App Control 封鎖未簽章執行檔（WinError 4551），見 DISTRIBUTION.md |
+| **免安裝版啟動** | 在 SAC 強制模式的機器上實跑 `啟動 XS 工坊.bat` | **通過**：首頁 200、知識庫 17 檔 2764 筆掛載 |
+| **免安裝版完整對話** | 走內嵌 Python → SDK → 內附 claude.exe | **通過**：首字 3.9 s、全長 29 s、腳本結構正確 |
+| **內附 CLI 路徑** | 強制走 `_bundled/claude.exe`，模擬從沒裝過 Claude Code 的使用者 | **通過**：登入偵測正確、實際回應正確 |
+| 簽章稽核 | 打包時逐支 `.exe` 查 Authenticode | 通過：零未簽章執行檔 |
+| PyInstaller EXE 啟動 | 雙擊 | **仍未通過**——Smart App Control 封鎖未簽章執行檔（WinError 4551）。已改用免安裝版繞過，見 DISTRIBUTION.md |
 
 **未驗證項目（誠實記錄）**：Anthropic API 與 OpenRouter 兩條路線的實際線上呼叫
 未測（手上無金鑰）。兩者共用的串流解析與錯誤處理已用假端點驗過，
 但真實服務的回應細節（模型名稱、錯誤碼語意）尚未對照。
+本地模型同樣以假端點驗證，未接真實 Ollama。
 
 ## 邊界
 

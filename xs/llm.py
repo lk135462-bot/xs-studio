@@ -198,29 +198,47 @@ def _bundled_claude_cli():
         return ""
 
 
-def _find_claude_cli():
-    """找出要驅動的 claude 執行檔：先用使用者自己裝的，沒有才用內附那一份。
+def _native_claude_exe():
+    """使用者自己裝的**原生** claude.exe（官方安裝程式裝的那種）。
 
-    順序是有意義的——使用者自己裝的版本通常較新，而且他們的登入狀態、
-    設定都掛在那一份上面。
+    刻意只認 .exe，不認 .cmd——理由見 _find_claude_cli。
     """
     import shutil
+    cand = shutil.which("claude.exe")
+    if cand and cand.lower().endswith(".exe"):
+        return cand
+    for base in (os.path.expandvars(r"%LOCALAPPDATA%\Programs\claude"),
+                 os.path.expandvars(r"%LOCALAPPDATA%\claude"),
+                 os.path.expandvars(r"%PROGRAMFILES%\claude")):
+        p = Path(base) / "claude.exe"
+        if p.exists():
+            return str(p)
+    return ""
+
+
+def _find_claude_cli():
+    """找出要驅動的 claude 執行檔。順序：原生 exe → 內附 exe → 最後才輪到 .cmd。
+
+    **為什麼把 npm 裝的 claude.cmd 排到最後**（這條踩過）：
+    claude-agent-sdk 自 0.2.142 起會拒絕執行 .bat/.cmd——
+    「Windows runs .bat/.cmd files via cmd.exe, which can execute commands
+    injected through CLI arguments」，那是它刻意的安全設計，不是 bug。
+    舊版（0.2.93）還吃 .cmd，所以在開發機上一切看起來正常，
+    使用者裝到新版就整條斷掉。優先給原生 exe 才是對的。
+
+    .cmd 仍留在最後一順位：probe／login 是我們自己開子進程跑的，
+    那條路 .cmd 沒問題，總比「什麼都找不到」好。
+    """
     cached = getattr(_find_claude_cli, "_cached", "unset")
     if cached != "unset":
         return cached
-    cand = shutil.which("claude.cmd") or shutil.which("claude")
+    cand = _native_claude_exe() or _bundled_claude_cli()
     if not cand:
-        for base in (os.path.expandvars(r"%APPDATA%\npm"),
-                     os.path.expandvars(r"%LOCALAPPDATA%\Programs\claude")):
-            for name in ("claude.cmd", "claude.exe", "claude"):
-                p = Path(base) / name
-                if p.exists():
-                    cand = str(p)
-                    break
-            if cand:
-                break
+        import shutil
+        cand = shutil.which("claude.cmd") or shutil.which("claude") or ""
     if not cand:
-        cand = _bundled_claude_cli()
+        p = Path(os.path.expandvars("%APPDATA%")) / "npm" / "claude.cmd"
+        cand = str(p) if p.exists() else ""
     _find_claude_cli._cached = cand
     return cand
 
